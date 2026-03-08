@@ -17,7 +17,7 @@ from backend.src.services.video_indexer import VideoIndexerService
 
 # configure Logger
 logger = logging.getLogger("Compliance-QA")
-logging.basicConfig(leverl = logging.INFO)
+logging.basicConfig(level = logging.INFO)
 
 # --- NODE 1: THE INDEXER ---
 def index_video_node(state: VideoAuditState) -> Dict[str, Any]:
@@ -36,13 +36,13 @@ def index_video_node(state: VideoAuditState) -> Dict[str, Any]:
         vi_service = VideoIndexerService()
 
         # Download
-        if "youtupe.com" in video_url or "youtupe.be" in video_url:
-            local_path = vi_service.download_youtupe_video(video_url, output_path = local_filename)
+        if "youtube.com" in video_url or "youtu.be" in video_url:
+            local_path = vi_service.download_youtube_video(video_url, output_path = local_filename)
         else:
-            raise Exception("Please provide a valid YouTupe URL")
+            raise Exception("Please provide a valid YouTube URL")
 
         # Upload
-        azure_video_id = vi_service.upload_video(local_path, video_name = video_id_input)
+        azure_video_id = vi_service.upload_video(local_path, video_name = video_id)
         logger.info(f"Upload Success. Azure ID: {azure_video_id}")
 
         # Clean up local file
@@ -50,11 +50,11 @@ def index_video_node(state: VideoAuditState) -> Dict[str, Any]:
             os.remove(local_path)
 
         # wait 
-        raw_insights = vi_service.wait_for_proessing(azure_video_id)
+        raw_insights = vi_service.wait_for_processing(azure_video_id)
         logger.info("Video Processing Completed")
 
         # Extract 
-        claan_data = vi_service.extract_data(raw_insights)
+        clean_data = vi_service.extract_data(raw_insights)
 
         logger.info("---- [Node: Indexer] Extraction complete ----")
         return clean_data
@@ -73,7 +73,7 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
     """
     Performs Retrieval-Augmented Generation (RAG) to audit the content.
     """
-    logger.info("---- [Node: Auditor] querying Knowledge Base & LMM ----")
+    logger.info("---- [Node: Auditor] querying Knowledge Base & LLM ----")
 
     transcript = state.get("transcript", "")
 
@@ -93,20 +93,22 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
 
     # Initialize Embeddings
     embeddings = AzureOpenAIEmbeddings(
-        azure_deployment = "text-embedding-2-small",
-        openai_api_version = os.genenv("AZURE_OPENAI_API_VERSION")
+        azure_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small"),
+        azure_endpoint = os.getenv("AZURE_OPENAI_EMBEDDING_ENDPOINT"),
+        api_key = os.getenv("AZURE_OPENAI_EMBEDDING_API_KEY"),
+        openai_api_version = os.getenv("AZURE_OPENAI_API_VERSION")
     )
 
     # Initialize Vector Store
     vector_store = AzureSearch(
         azure_search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT"),
-        azure_search_key = os.getenv("AZURE_SEARCH_KEY"),
+        azure_search_key = os.getenv("AZURE_SEARCH_API_KEY"),
         index_name = os.getenv("AZURE_SEARCH_INDEX_NAME"),
         embedding_function = embeddings.embed_query
     )
 
-    # RAG Retrievel
-    ocr_txt = state.get("ocr_text", [])
+    # RAG Retrieval
+    ocr_text = state.get("ocr_text", [])
     query_text = f"{transcript} {' '.join(ocr_text)}"
     docs= vector_store.similarity_search(query_text, k = 3)
 
@@ -117,7 +119,7 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
     You are a Senior Brand Compliance Auditor.
 
     OFFICIAL REGULATORY RULES:
-    {retrived_rules}
+    {retrieved_rules}
 
     INSTRUCTIONS:
     1. Analyze the transcript and OCR text.
@@ -133,7 +135,7 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
             }}
         ],
         "status": "PASS/FAIL",
-        "final_report": Summary of finding..."
+        "final_report": "Summary of finding..."
     }}
 
     If no violations are found, set "status" to "PASS" and "compliance_results" to [].
@@ -147,7 +149,7 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
 
     try:
         response = llm.invoke([
-            SystemMessage(content = System_prompt),
+            SystemMessage(content = system_prompt),
             HumanMessage(content = user_message)
         ])
 
@@ -160,8 +162,8 @@ def audit_content_node(state: VideoAuditState) -> Dict[str, Any]:
         audit_data = json.loads(content.strip())
 
         return {
-            "compliance_results": audit_data.get("complaince_results", []),
-            "final_status": audit_data.get("Status","FAIL"),
+            "compliance_results": audit_data.get("compliance_results", []),
+            "final_status": audit_data.get("status", "FAIL"),
             "final_report": audit_data.get("final_report", "No report generated.")
         }
     

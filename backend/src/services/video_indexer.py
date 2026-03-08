@@ -127,8 +127,8 @@ class VideoIndexerService:
     def extract_data(self, vi_json):
         """Parses the JSON into our state format."""
         transcript_lines = []
-        for v in vi_json.get("video", []):
-            for insight in v.get("insight", {}).get("transcript", []):
+        for v in vi_json.get("videos", []):
+            for insight in v.get("insights", {}).get("transcript", []):
                 transcript_lines.append(insight.get("text")) 
 
         ocr_lines = []

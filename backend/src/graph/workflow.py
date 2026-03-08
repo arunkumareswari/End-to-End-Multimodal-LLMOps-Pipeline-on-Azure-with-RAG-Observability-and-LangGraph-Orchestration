@@ -5,12 +5,12 @@ This module defines the Directed Acyclic Graph (DAG) that orchestrates the
 video compliance audit process using LangGraph.
 """
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
 
 # Import the State Schema
 from backend.src.graph.state import VideoAuditState
 
-# Import the Funtional Nodes
+# Import the Functional Nodes
 from backend.src.graph.nodes import index_video_node, audit_content_node
 
 # Conditional Routing Logic
