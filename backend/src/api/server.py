@@ -24,7 +24,7 @@ logger = logging.getLogger("api-server")
 # Initialize FastAPI app
 app = FastAPI(
     # Metadata for auto-generated API documentation (Swagger UI)
-    title = "Compliance QA AI API",
+    title = "ComplianceGuard AI API",
     description="API for auditing video content against brand compliance rules.",
     version="1.0.0"
 )
@@ -102,5 +102,5 @@ async def audit_video(request: AuditRequest):
 def health_check():
     return {
         "status": "healthy", 
-        "service": "Compliance QA AI"
+        "service": "ComplianceGuard AI"
     }
